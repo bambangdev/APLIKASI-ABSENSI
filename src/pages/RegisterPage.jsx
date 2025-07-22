@@ -1,12 +1,6 @@
-// ========================================================================
-// FILE LAMA (UPDATE PENTING): src/pages/RegisterPage.jsx
-// FUNGSI: Menambahkan `updateProfile` untuk memastikan nama pengguna
-// tersimpan di akun Authentication.
-// ========================================================================
-
 import React, { useState } from 'react';
 import { auth, db } from '../firebase/firebase';
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"; // <-- IMPORT BARU
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function RegisterPage({ onNavigate }) {
@@ -15,6 +9,7 @@ export default function RegisterPage({ onNavigate }) {
   const [password, setPassword] = useState('');
   const [team, setTeam] = useState('Host');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false); // <-- STATE LOADING BARU
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -23,15 +18,13 @@ export default function RegisterPage({ onNavigate }) {
         setError('Semua kolom harus diisi.');
         return;
     }
+    setLoading(true); // <-- MULAI LOADING
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // <-- LANGKAH PENTING BARU -->
-      // Simpan nama pengguna ke profil Authentication-nya
       await updateProfile(user, { displayName: name });
 
-      // Simpan data ke Firestore
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         name: name,
@@ -44,6 +37,8 @@ export default function RegisterPage({ onNavigate }) {
     } catch (err) {
       setError('Gagal mendaftar. Pastikan email valid dan password lebih dari 6 karakter.');
       console.error('Error saat mendaftar:', err.message);
+    } finally {
+      setLoading(false); // <-- SELESAI LOADING
     }
   };
 
@@ -61,6 +56,7 @@ export default function RegisterPage({ onNavigate }) {
               onChange={(e) => setName(e.target.value)} 
               placeholder="Nama Anda"
               className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading} // <-- Tambahkan disabled
             />
           </div>
           <div>
@@ -71,6 +67,7 @@ export default function RegisterPage({ onNavigate }) {
               onChange={(e) => setEmail(e.target.value)} 
               placeholder="nama@email.com"
               className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading} // <-- Tambahkan disabled
             />
           </div>
           <div>
@@ -81,6 +78,7 @@ export default function RegisterPage({ onNavigate }) {
               onChange={(e) => setPassword(e.target.value)} 
               placeholder="Minimal 6 karakter"
               className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading} // <-- Tambahkan disabled
             />
           </div>
           <div>
@@ -89,6 +87,7 @@ export default function RegisterPage({ onNavigate }) {
               value={team} 
               onChange={(e) => setTeam(e.target.value)}
               className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading} // <-- Tambahkan disabled
             >
               <option value="Host">Host</option>
               <option value="Treatment">Treatment</option>
@@ -97,9 +96,10 @@ export default function RegisterPage({ onNavigate }) {
           </div>
           <button 
             type="submit"
-            className="w-full px-4 py-2 font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
+            disabled={loading} // <-- Tambahkan disabled
           >
-            Daftar
+            {loading ? 'Mendaftarkan akun...' : 'Daftar'}
           </button>
         </form>
         <p className="text-sm text-center text-gray-600">
