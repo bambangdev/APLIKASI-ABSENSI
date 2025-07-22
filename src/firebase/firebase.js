@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // <-- 1. IMPORT INI
 
 const firebaseConfig = {
   // SALIN-TEMPEL KUNCI ANDA DI SINI
@@ -15,5 +16,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-// token git 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
-
+export const storage = getStorage(app); // <-- 2. EKSPOR INI

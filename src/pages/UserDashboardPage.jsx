@@ -1,20 +1,92 @@
-// ========================================================================
-// FILE LAMA (UPDATE DESAIN): src/pages/UserDashboardPage.jsx
-// FUNGSI: Mendesain ulang kartu agar lebih modern dan menarik.
-// ========================================================================
-
-import React, { useState, useEffect } from 'react';
-import { db, auth } from '../firebase/firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { db, auth, storage } from '../firebase/firebase';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+// Komponen Modal untuk Selfie
+const SelfieModal = ({ isOpen, onClose, onCapture, loadingMessage }) => {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [stream, setStream] = useState(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+        .then(stream => {
+          setStream(stream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        })
+        .catch(err => {
+          console.error("Error accessing camera:", err);
+          alert("Tidak bisa mengakses kamera. Pastikan Anda memberikan izin.");
+          onClose();
+        });
+    } else {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
+    }
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isOpen]);
+
+  const handleCapture = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      canvas.toBlob((blob) => {
+        onCapture(blob);
+      }, 'image/jpeg');
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md text-center">
+        <h2 className="text-2xl font-bold mb-4">Ambil Foto Selfie</h2>
+        <div className="relative mb-4 bg-gray-200 rounded-md overflow-hidden">
+          <video ref={videoRef} autoPlay playsInline className="w-full h-auto" />
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
+        {loadingMessage ? (
+          <p className="text-lg font-medium text-blue-600">{loadingMessage}</p>
+        ) : (
+          <div className="flex justify-center space-x-4">
+            <button onClick={onClose} className="px-6 py-2 bg-gray-300 rounded-md font-semibold">Batal</button>
+            <button onClick={handleCapture} className="px-6 py-2 bg-blue-600 text-white rounded-md font-bold">Ambil Foto & Absen</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function UserDashboardPage() {
   const [time, setTime] = useState(new Date());
-  const [attendanceStatus, setAttendanceStatus] = useState('loading'); // loading, not_clocked_in, clocked_in, clocked_out
+  const [attendanceStatus, setAttendanceStatus] = useState('loading');
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const currentUser = auth.currentUser;
 
   const getTodayDocId = () => new Date().toISOString().split('T')[0];
 
   useEffect(() => {
+    // ========================================================================
+    // PERBAIKAN: Mengembalikan logika untuk memeriksa status absensi harian
+    // ========================================================================
     const checkTodaysAttendance = async () => {
       if (!currentUser) return;
       const todayId = getTodayDocId();
@@ -23,16 +95,20 @@ export default function UserDashboardPage() {
         const docSnap = await getDoc(attendanceDocRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          if (data.clockOut) setAttendanceStatus('clocked_out');
-          else setAttendanceStatus('clocked_in');
+          if (data.clockOut) {
+            setAttendanceStatus('clocked_out');
+          } else {
+            setAttendanceStatus('clocked_in');
+          }
         } else {
           setAttendanceStatus('not_clocked_in');
         }
       } catch (error) {
         console.error("Error checking attendance:", error);
-        setAttendanceStatus('not_clocked_in');
+        setAttendanceStatus('not_clocked_in'); // Set ke default jika ada error
       }
     };
+
     checkTodaysAttendance();
   }, [currentUser]);
 
@@ -41,17 +117,34 @@ export default function UserDashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleClockIn = async () => {
-    if (!currentUser) return;
-    setAttendanceStatus('loading');
+  const handleClockIn = async (selfieBlob) => {
+    if (!currentUser || !selfieBlob) return;
+    
     const todayId = getTodayDocId();
     const attendanceDocRef = doc(db, "users", currentUser.uid, "attendance", todayId);
+    
     try {
-      await setDoc(attendanceDocRef, { clockIn: new Date(), clockOut: null, status: 'Tepat Waktu' });
+      setLoadingMessage("Mengunggah foto...");
+      const storageRef = ref(storage, `selfies/${currentUser.uid}/${todayId}.jpg`);
+      await uploadBytes(storageRef, selfieBlob);
+      const selfieUrl = await getDownloadURL(storageRef);
+
+      setLoadingMessage("Menyimpan data absensi...");
+      await setDoc(attendanceDocRef, { 
+        clockIn: new Date(), 
+        clockOut: null, 
+        status: 'Tepat Waktu',
+        selfieUrl: selfieUrl
+      });
+
       setAttendanceStatus('clocked_in');
     } catch (error) {
       console.error("Error clocking in:", error);
+      alert("Gagal melakukan absen. Silakan coba lagi.");
       setAttendanceStatus('not_clocked_in');
+    } finally {
+      setLoadingMessage('');
+      setIsCameraOpen(false);
     }
   };
 
@@ -82,21 +175,28 @@ export default function UserDashboardPage() {
         not_clocked_in: 'Absen Masuk',
         clocked_in: 'Absen Pulang',
         clocked_out: 'Anda Sudah Absen'
-    }
+    };
 
-    return <button disabled={attendanceStatus === 'loading' || attendanceStatus === 'clocked_out'} onClick={attendanceStatus === 'not_clocked_in' ? handleClockIn : handleClockOut} className={`${baseClasses} ${statusClasses[attendanceStatus]}`}>{text[attendanceStatus]}</button>;
+    const action = attendanceStatus === 'not_clocked_in' 
+      ? () => setIsCameraOpen(true)
+      : handleClockOut;
+
+    return <button disabled={attendanceStatus === 'loading' || attendanceStatus === 'clocked_out'} onClick={action} className={`${baseClasses} ${statusClasses[attendanceStatus]}`}>{text[attendanceStatus]}</button>;
   };
 
   return (
     <div>
-      {/* Kartu Jam & Tombol Aksi */}
+      <SelfieModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={handleClockIn}
+        loadingMessage={loadingMessage}
+      />
       <div className="bg-gradient-to-br from-primary-600 to-primary-800 text-white p-6 md:p-8 rounded-2xl shadow-xl mb-8 flex flex-col items-center text-center">
         <p className="font-medium text-primary-200">{time.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         <h2 className="text-5xl md:text-6xl font-bold my-2 tracking-tight">{time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</h2>
         {renderButton()}
       </div>
-
-      {/* Kartu Statistik */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-surface p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow">
           <h3 className="font-bold text-lg mb-4 text-on-surface">Ringkasan Bulan Ini</h3>
