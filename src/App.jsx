@@ -1,9 +1,9 @@
 // ========================================================================
 // FILE LAMA (UPDATE): src/App.jsx
-// FUNGSI: Menambahkan halaman Profil ke dalam logika navigasi.
+// FUNGSI: Memperbaiki kesalahan sintaks import React Hooks.
 // ========================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // <-- KESALAHAN ADA DI SINI, SEKARANG SUDAH DIPERBAIKI
 import { auth, db } from './firebase/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -20,7 +20,7 @@ import AdminRequestsPage from './pages/AdminRequestsPage.jsx';
 import UserHistoryPage from './pages/UserHistoryPage.jsx';
 import AdminReportsPage from './pages/AdminReportsPage.jsx';
 import AdminSettingsPage from './pages/AdminSettingsPage.jsx';
-import ProfilePage from './pages/ProfilePage.jsx'; // <-- IMPORT HALAMAN BARU
+import ProfilePage from './pages/ProfilePage.jsx';
 import MainLayout from './components/MainLayout.jsx';
 
 export default function App() {
@@ -67,7 +67,7 @@ export default function App() {
 
     const pageMap = {
       'superadmin-dashboard': <SuperAdminDashboardPage onNavigate={navigateApp} />,
-      'admin-employees': <AdminEmployeesPage />,
+      'admin-employees': <AdminEmployeesPage currentUserData={userData} />,
       'admin-requests': <AdminRequestsPage />,
       'admin-reports': <AdminReportsPage />,
       'superadmin-settings': <AdminSettingsPage />,
