@@ -1,19 +1,19 @@
 // ========================================================================
-// FILE: src/pages/RegisterPage.jsx
-// FUNGSI: Halaman untuk pengguna baru mendaftarkan akun.
+// FILE LAMA (UPDATE PENTING): src/pages/RegisterPage.jsx
+// FUNGSI: Menambahkan `updateProfile` untuk memastikan nama pengguna
+// tersimpan di akun Authentication.
 // ========================================================================
 
 import React, { useState } from 'react';
 import { auth, db } from '../firebase/firebase';
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"; // <-- IMPORT BARU
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
-// `onNavigate` adalah properti untuk berpindah kembali ke halaman login
 export default function RegisterPage({ onNavigate }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('Host'); // Nilai default
+  const [team, setTeam] = useState('Host');
   const [error, setError] = useState('');
 
   const handleRegister = async (e) => {
@@ -24,21 +24,23 @@ export default function RegisterPage({ onNavigate }) {
         return;
     }
     try {
-      // 1. Buat pengguna di Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Simpan informasi tambahan (nama, role) di Firestore
-      // Kita membuat dokumen baru di koleksi 'users' dengan ID yang sama dengan ID pengguna
+      // <-- LANGKAH PENTING BARU -->
+      // Simpan nama pengguna ke profil Authentication-nya
+      await updateProfile(user, { displayName: name });
+
+      // Simpan data ke Firestore
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         name: name,
         email: email,
-        role: role,
-        company: 'infinithree', // Sesuai permintaan
-        createdAt: serverTimestamp() // Menambahkan tanggal pembuatan akun
+        role: "Staff",
+        team: team,
+        company: 'infinithree',
+        createdAt: serverTimestamp()
       });
-      // onAuthStateChanged di App.jsx akan menangani sisanya
     } catch (err) {
       setError('Gagal mendaftar. Pastikan email valid dan password lebih dari 6 karakter.');
       console.error('Error saat mendaftar:', err.message);
@@ -48,10 +50,8 @@ export default function RegisterPage({ onNavigate }) {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center">Buat Akun Baru</h1>
-        
+        <h1 className="text-2xl font-bold text-center">Buat Akun Staff Baru</h1>
         {error && <p className="p-3 text-sm text-red-700 bg-red-100 rounded-md">{error}</p>}
-
         <form onSubmit={handleRegister} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
@@ -84,10 +84,10 @@ export default function RegisterPage({ onNavigate }) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Role</label>
+            <label className="block text-sm font-medium text-gray-700">Pilih Tim</label>
             <select 
-              value={role} 
-              onChange={(e) => setRole(e.target.value)}
+              value={team} 
+              onChange={(e) => setTeam(e.target.value)}
               className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="Host">Host</option>
@@ -102,7 +102,6 @@ export default function RegisterPage({ onNavigate }) {
             Daftar
           </button>
         </form>
-
         <p className="text-sm text-center text-gray-600">
           Sudah punya akun?{' '}
           <button onClick={() => onNavigate('login')} className="font-medium text-blue-600 hover:underline">
