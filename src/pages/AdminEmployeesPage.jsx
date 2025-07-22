@@ -1,28 +1,21 @@
-// ========================================================================
-// FILE (UPDATE BESAR): src/pages/AdminEmployeesPage.jsx
-// FUNGSI: Halaman ini sekarang memiliki modal (pop-up) fungsional untuk
-// menambah dan mengedit data staff.
-// ========================================================================
-
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase/firebase';
-import { collection, getDocs, query, where, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 
 // Komponen Modal yang bisa digunakan ulang untuk Tambah dan Edit
 const StaffModal = ({ isOpen, onClose, staffData, onSave }) => {
+  // ... (Isi Komponen Modal tidak berubah)
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [team, setTeam] = useState('Host');
-  const isEditing = !!staffData; // Tentukan apakah ini mode edit
+  const isEditing = !!staffData;
 
   useEffect(() => {
     if (isOpen && staffData) {
-      // Jika mode edit, isi form dengan data staff
       setName(staffData.name);
       setEmail(staffData.email);
       setTeam(staffData.team);
     } else if (isOpen && !staffData) {
-      // Jika mode tambah, kosongkan form
       setName('');
       setEmail('');
       setTeam('Host');
@@ -69,25 +62,23 @@ const StaffModal = ({ isOpen, onClose, staffData, onSave }) => {
   );
 };
 
-
-export default function AdminEmployeesPage() {
+export default function AdminEmployeesPage({ currentUserData }) { // <-- Terima props di sini
   const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingStaff, setEditingStaff] = useState(null); // null untuk mode tambah, object untuk mode edit
+  const [editingStaff, setEditingStaff] = useState(null);
 
   const fetchStaff = async () => {
+    // ... (Fungsi ini tidak berubah)
     setLoading(true);
     try {
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("role", "==", "Staff"));
-      
       const querySnapshot = await getDocs(q);
       const staff = [];
       querySnapshot.forEach((doc) => {
         staff.push({ id: doc.id, ...doc.data() });
       });
-      
       setStaffList(staff);
     } catch (error) {
       console.error("Error mengambil data staff:", error);
@@ -116,19 +107,14 @@ export default function AdminEmployeesPage() {
   };
 
   const handleSaveStaff = async (staffData) => {
+    // ... (Fungsi ini tidak berubah)
     if (editingStaff) {
-      // Logika untuk UPDATE staff yang ada
       const staffDocRef = doc(db, "users", editingStaff.id);
       await updateDoc(staffDocRef, {
         name: staffData.name,
         team: staffData.team,
       });
     } else {
-      // Logika untuk CREATE staff baru
-      // PENTING: Di aplikasi nyata, membuat user (Authentication) dari sisi admin
-      // memerlukan Firebase Admin SDK di server. Untuk prototipe ini, kita hanya
-      // menambahkan data ke Firestore. Akun Authentication harus dibuat manual
-      // atau melalui halaman registrasi.
       await addDoc(collection(db, "users"), {
         name: staffData.name,
         email: staffData.email,
@@ -138,8 +124,32 @@ export default function AdminEmployeesPage() {
         createdAt: serverTimestamp(),
       });
     }
-    fetchStaff(); // Ambil ulang data terbaru dari Firestore
+    fetchStaff();
     handleCloseModal();
+  };
+  
+  // ========================================================================
+  // FUNGSI BARU: Logika untuk mereset absensi
+  // ========================================================================
+  const handleResetAttendance = async (staffId, staffName) => {
+    // Tampilkan dialog konfirmasi
+    if (!window.confirm(`Anda yakin ingin mereset absensi hari ini untuk ${staffName}? Pengguna ini akan dapat melakukan clock-in lagi.`)) {
+      return;
+    }
+
+    try {
+      // Dapatkan ID dokumen untuk hari ini (format: YYYY-MM-DD)
+      const todayId = new Date().toISOString().split('T')[0];
+      const attendanceDocRef = doc(db, "users", staffId, "attendance", todayId);
+
+      // Hapus dokumen absensi hari ini untuk pengguna tersebut
+      await deleteDoc(attendanceDocRef);
+
+      alert(`Absensi untuk ${staffName} hari ini telah berhasil direset.`);
+    } catch (error) {
+      console.error("Error resetting attendance:", error);
+      alert("Gagal mereset absensi. Mungkin pengguna belum absen hari ini.");
+    }
   };
 
   if (loading) {
@@ -184,7 +194,17 @@ export default function AdminEmployeesPage() {
                     </span>
                   </td>
                   <td className="p-4">
-                    <button onClick={() => handleOpenEditModal(staff)} className="font-medium text-blue-600 hover:underline">Edit</button>
+                    <button onClick={() => handleOpenEditModal(staff)} className="font-medium text-blue-600 hover:underline mr-4">Edit</button>
+                    
+                    {/* Tombol Reset Absen, hanya muncul untuk SuperAdmin */}
+                    {currentUserData && currentUserData.role === 'SuperAdmin' && (
+                      <button
+                        onClick={() => handleResetAttendance(staff.id, staff.name)}
+                        className="font-medium text-red-600 hover:underline"
+                      >
+                        Reset Absen
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
